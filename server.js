@@ -130,3 +130,19 @@ router.get("/get/:id", async (req, res) => {
 });
 
 module.exports = router;
+
+// --- サーバー起動部分を追加 ---
+const app = express();
+app.use(express.json());
+
+// ルーターをルートパスにアタッチ
+app.use('/', router); 
+
+// Renderなどのホスティングサービスで必要な環境変数PORTを使用
+const PORT = process.env.PORT || 3000;
+
+// サーバーを起動
+app.listen(PORT, () => {
+    console.log(`サーバーはポート ${PORT} で実行中です。`);
+    console.log(`使用方法: http://localhost:${PORT}/get/<YouTube_Video_ID>`);
+});
