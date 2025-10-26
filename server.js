@@ -90,6 +90,32 @@ const getHlsUrlFromInvidious = async (videoId) => {
     return null;
 };
 
+// --------------------------------------------------------
+// 新しいエンドポイント: HLS URL自体を返す
+// --------------------------------------------------------
+router.get("/get/url/:videoid", async (req, res) => {
+    const videoId = req.params.videoid;
+    if (!videoId) {
+        return res.status(400).send("Video ID is required.");
+    }
+
+    const hlsUrl = await getHlsUrlFromInvidious(videoId);
+
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET');
+    res.setHeader('Content-Type', 'text/plain');
+
+    if (!hlsUrl) {
+        return res.status(404).send("Failed to retrieve a valid HLS URL from all Invidious instances.");
+    }
+    
+    // 取得した絶対URLをテキストとして返す
+    res.send(hlsUrl);
+});
+
+// --------------------------------------------------------
+// 既存のエンドポイント: HLS マニフェスト内容をプロキシする
+// --------------------------------------------------------
 router.get("/get/:id", async (req, res) => {
     const videoId = req.params.id;
     if (!videoId) return res.redirect("/");
@@ -140,14 +166,12 @@ module.exports = router;
 const app = express();
 app.use(express.json());
 
-// ルーターをルートパスにアタッチ
 app.use('/', router); 
 
-// Renderなどのホスティングサービスで必要な環境変数PORTを使用
 const PORT = process.env.PORT || 3000;
 
-// サーバーを起動
 app.listen(PORT, () => {
     console.log(`サーバーはポート ${PORT} で実行中です。`);
-    console.log(`使用方法: http://localhost:${PORT}/get/<YouTube_Video_ID>`);
+    console.log(`URL取得: http://localhost:${PORT}/get/url/<YouTube_Video_ID>`);
+    console.log(`プロキシ: http://localhost:${PORT}/get/<YouTube_Video_ID>`);
 });
