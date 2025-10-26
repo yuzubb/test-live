@@ -64,9 +64,14 @@ const getHlsUrlFromInvidious = async (videoId) => {
                 (f.qualityLabel && f.qualityLabel.toLowerCase().includes(HLS_FORMAT_NAME))
             );
             
-            const hlsUrl = hlsFormat ? hlsFormat.url : videoInfo.hlsUrl;
+            let hlsUrl = hlsFormat ? hlsFormat.url : videoInfo.hlsUrl;
 
             if (hlsUrl) {
+                // HLS URLが相対パスの場合、インスタンスのベースURLと結合して絶対URLにする
+                if (!hlsUrl.startsWith('http')) {
+                    hlsUrl = url.resolve(instance, hlsUrl);
+                }
+                
                 console.log(`[Invidious] 成功! HLS URLを ${instance} から取得。`);
                 return hlsUrl;
             } else {
@@ -131,7 +136,7 @@ router.get("/get/:id", async (req, res) => {
 
 module.exports = router;
 
-// --- サーバー起動部分を追加 ---
+// --- サーバー起動コード ---
 const app = express();
 app.use(express.json());
 
