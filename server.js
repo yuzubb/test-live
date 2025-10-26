@@ -17,6 +17,7 @@ const INVIDIOUS_INSTANCES = [
 
 const API_TIMEOUT_MS = 5000;
 const HLS_FORMAT_NAME = 'hls'; 
+const TARGET_DOMAIN = 'manifest.googlevideo.com'; // 新しいターゲットドメイン
 
 const rewriteHlsManifest = (manifestContent, baseUrl) => {
     const base = baseUrl.substring(0, baseUrl.lastIndexOf('/') + 1);
@@ -34,6 +35,18 @@ const rewriteHlsManifest = (manifestContent, baseUrl) => {
         }
         return line;
     }).join('\n');
+};
+
+const replaceDomain = (hlsUrl, newDomain) => {
+    try {
+        const parsedUrl = new URL(hlsUrl);
+        parsedUrl.hostname = newDomain.replace(/https?:\/\//, '');
+        parsedUrl.protocol = 'https:';
+        return parsedUrl.toString();
+    } catch (e) {
+        console.error("Failed to replace domain:", e);
+        return hlsUrl;
+    }
 };
 
 const getHlsUrlFromInvidious = async (videoId) => {
@@ -91,7 +104,7 @@ const getHlsUrlFromInvidious = async (videoId) => {
 };
 
 // --------------------------------------------------------
-// 新しいエンドポイント: HLS URL自体を返す
+// エンドポイント: HLS URL自体を返す
 // --------------------------------------------------------
 router.get("/get/url/:videoid", async (req, res) => {
     const videoId = req.params.videoid;
@@ -109,12 +122,15 @@ router.get("/get/url/:videoid", async (req, res) => {
         return res.status(404).send("Failed to retrieve a valid HLS URL from all Invidious instances.");
     }
     
+    // ドメインを manifest.googlevideo.com に置き換える
+    const finalHlsUrl = replaceDomain(hlsUrl, TARGET_DOMAIN);
+    
     // 取得した絶対URLをテキストとして返す
-    res.send(hlsUrl);
+    res.send(finalHlsUrl);
 });
 
 // --------------------------------------------------------
-// 既存のエンドポイント: HLS マニフェスト内容をプロキシする
+// エンドポイント: HLS マニフェスト内容をプロキシする
 // --------------------------------------------------------
 router.get("/get/:id", async (req, res) => {
     const videoId = req.params.id;
@@ -126,6 +142,9 @@ router.get("/get/:id", async (req, res) => {
         return res.status(500).send("全てのインスタンスからライブストリームURLの取得に失敗しました。");
     }
     
+    // ドメインを manifest.googlevideo.com に置き換える
+    const finalHlsUrl = replaceDomain(hlsUrl, TARGET_DOMAIN);
+
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -134,7 +153,8 @@ router.get("/get/:id", async (req, res) => {
     let manifestContent = '';
     
     try {
-        const stream = miniget(hlsUrl, { 
+        // 置換後のURLを使ってマニフェストを取得
+        const stream = miniget(finalHlsUrl, { 
             maxRedirects: 5, 
             timeout: 10000, 
             headers: { 'User-Agent': user_agent } 
@@ -146,16 +166,17 @@ router.get("/get/:id", async (req, res) => {
             stream.on('end', () => resolve(data.toString()));
             stream.on('error', reject); 
         });
-        console.log(`HLSマニフェストの内容を取得完了: ${hlsUrl}`);
+        console.log(`HLSマニフェストの内容を取得完了: ${finalHlsUrl}`);
 
     } catch (error) {
-        console.error(`最終的なHLSマニフェスト取得エラー (${hlsUrl}):`, error.message);
+        console.error(`最終的なHLSマニフェスト取得エラー (${finalHlsUrl}):`, error.message);
         if (!res.headersSent) {
             return res.status(500).send("HLSマニフェストのコンテンツ取得に失敗しました。");
         }
     }
 
-    const absoluteManifest = rewriteHlsManifest(manifestContent, hlsUrl);
+    // rewriteHlsManifest には、マニフェストを取得したURL（置換後のURL）を渡す
+    const absoluteManifest = rewriteHlsManifest(manifestContent, finalHlsUrl);
 
     res.send(absoluteManifest);
 });
